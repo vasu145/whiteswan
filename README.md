@@ -1,16 +1,10 @@
-# 🦢 WhiteSwan Smart Resume Screener
+# WhiteSwan Semantic Resume Screener
 
-Upgraded version that uses NLP to extract meaningful keywords from job descriptions and match multiple resumes based on real recruiter logic.
+This app uses sentence-transformers to match resumes to a job description using semantic similarity (not just keywords).
 
-## Features
-- Upload 50–100 resumes at once
-- Filters out generic words (like "the", "have", "and")
-- Scores based on matched *skills* and *keywords*
-- Gives smart feedback for each resume
+## Features:
+- Upload multiple resumes
+- Paste a job description
+- Get semantic match scores and AI-generated feedback
 
-## Run Locally
-
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
+Powered by: `all-MiniLM-L6-v2` from Hugging Face
