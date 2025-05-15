@@ -1,6 +1,5 @@
 streamlit
 pdfplumber
 docx2txt
-scikit-learn
-pandas
-nltk
+torch
+sentence-transformers
