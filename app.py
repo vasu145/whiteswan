@@ -4,15 +4,7 @@ import pdfplumber
 import docx2txt
 import re
 import pandas as pd
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
 import string
-
-nltk.download('punkt')
-nltk.download('stopwords')
 
 st.set_page_config(page_title="WhiteSwan Smart Resume Screener", layout="wide")
 st.title("🦢 WhiteSwan Smart Resume Matcher")
@@ -35,14 +27,20 @@ def clean_text(text):
     text = re.sub(r"[^a-zA-Z0-9+]", " ", text)
     return text
 
-def extract_keywords(text):
-    stop_words = set(stopwords.words("english"))
-    tokens = word_tokenize(clean_text(text))
-    keywords = [w for w in tokens if w not in stop_words and w not in string.punctuation and len(w) > 2]
+def tokenize(text):
+    stop_words = set([
+        "the", "and", "for", "are", "with", "that", "this", "you", "your", "have",
+        "has", "had", "was", "were", "not", "but", "from", "they", "their", "been",
+        "will", "would", "could", "should", "about", "into", "than", "then", "out",
+        "get", "got", "also", "each", "any", "all", "per", "she", "him", "her", "our",
+        "its", "it's", "is", "am", "an", "a", "of", "to", "in", "on", "by", "as", "be", "at", "or", "if", "it", "so", "we", "do"
+    ])
+    words = clean_text(text).split()
+    keywords = [w for w in words if w not in stop_words and len(w) > 2]
     return set(keywords)
 
 def get_match_score(resume, jd_keywords):
-    resume_tokens = extract_keywords(resume)
+    resume_tokens = tokenize(resume)
     matched = jd_keywords & resume_tokens
     missing = jd_keywords - resume_tokens
     score = round((len(matched) / len(jd_keywords)) * 100, 2) if jd_keywords else 0
@@ -50,7 +48,7 @@ def get_match_score(resume, jd_keywords):
 
 # --- Run Matching for Multiple Resumes ---
 if resume_files and jd_text:
-    jd_keywords = extract_keywords(jd_text)
+    jd_keywords = tokenize(jd_text)
 
     results = []
     for file in resume_files:
