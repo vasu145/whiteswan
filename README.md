@@ -1,10 +1,14 @@
-# WhiteSwan Semantic Resume Screener
+# WhiteSwan Resume Screener (Free AI Version)
 
-This app uses sentence-transformers to match resumes to a job description using semantic similarity (not just keywords).
+This app allows you to upload a job description and multiple resumes (PDFs), and get recruiter-style feedback based on semantic similarity.
 
-## Features:
-- Upload multiple resumes
-- Paste a job description
-- Get semantic match scores and AI-generated feedback
+## Features
+- Upload multiple resumes at once
+- Semantic matching using sentence transformers (MiniLM)
+- Match score and basic recruiter-style feedback
 
-Powered by: `all-MiniLM-L6-v2` from Hugging Face
+## Run Locally
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```

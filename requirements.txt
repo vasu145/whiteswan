@@ -1,5 +1,4 @@
 streamlit
-pdfplumber
-docx2txt
-torch
+PyMuPDF
 sentence-transformers
+torch
