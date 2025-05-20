@@ -1,11 +1,12 @@
-# WhiteSwan Resume Screener (Free AI Version)
+# WhiteSwan Advanced Resume Screener
 
-This app allows you to upload a job description and multiple resumes (PDFs), and get recruiter-style feedback based on semantic similarity.
+Enhanced version accepting PDF, DOCX, and TXT resumes. Provides a 5-point recruiter-style explanation for matches based on semantic and keyword analysis.
 
 ## Features
-- Upload multiple resumes at once
-- Semantic matching using sentence transformers (MiniLM)
-- Match score and basic recruiter-style feedback
+- Upload resumes in PDF, DOCX, or TXT
+- Semantic similarity matching using sentence-transformers
+- Keyword analysis for matched and missing skills
+- 5-point descriptive feedback for each resume
 
 ## Run Locally
 ```bash
