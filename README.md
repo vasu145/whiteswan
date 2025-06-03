@@ -1,6 +1,6 @@
-# WhiteSwan Structured Resume Screener
+# WhiteSwan Recruiter-Style Resume Reviewer
 
-This app allows you to evaluate resumes using structured job responsibilities like a recruiter.
+This app evaluates resumes like a recruiter using semantic matching of job duties and skills.
 
 ## How to Run
 

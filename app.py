@@ -5,7 +5,7 @@ import docx2txt
 import base64
 from sentence_transformers import SentenceTransformer, util
 
-st.set_page_config(page_title="WhiteSwan Structured Screener", layout="wide")
+st.set_page_config(page_title="Recruiter-Style Resume Screener", layout="wide")
 
 def set_background(image_file):
     with open(image_file, "rb") as f:
@@ -25,8 +25,7 @@ def set_background(image_file):
 
 set_background("background.jpg")
 
-st.title("🦢 WhiteSwan Structured Resume Screener")
-st.write("Upload resumes and provide structured job requirements to get a recruiter-style evaluation.")
+st.title("🦢 WhiteSwan Recruiter-Style Resume Reviewer")
 
 @st.cache_resource
 def load_model():
@@ -61,26 +60,72 @@ def score_fit(requirement, resume_text):
     else:
         return "Missing"
 
-def evaluate(requirements, resume_text):
-    feedback = []
-    for i, req in enumerate(requirements.split("\n")):
-        if req.strip():
-            level = score_fit(req, resume_text)
-            feedback.append(f"{i+1}. **{req.strip()}**: {level}")
-    return feedback
+def evaluate_section(title, items, resume_text):
+    st.markdown(f"### 📌 {title}")
+    results = []
+    gaps = []
+    for i, item in enumerate(items.split("\n")):
+        if item.strip():
+            level = score_fit(item.strip(), resume_text)
+            results.append((item.strip(), level))
+            if level in ["Missing", "Weak"]:
+                gaps.append(item.strip())
+    for req, level in results:
+        st.markdown(f"- **{req}**: {level}")
+    return results, gaps
 
-st.markdown("### Step 1: Paste Job Responsibilities (one per line)")
-job_requirements = st.text_area("Example:\nDesign/Develop IBM FTM Solutions\nCollaborate with Teams\nTranslate Requirements...", height=200)
+st.markdown("### Step 1: Paste Job Duties")
+job_duties = st.text_area("Job Duties (one per line)", height=150)
 
-st.markdown("### Step 2: Upload Resume (PDF or DOCX or TXT)")
-uploaded_resume = st.file_uploader("Upload Resume", type=["pdf", "docx", "txt"])
+st.markdown("### Step 2: Paste Core Skills")
+core_skills = st.text_area("Core Skills (Must Have)", height=120)
 
-if job_requirements and uploaded_resume:
-    resume_text = extract_text(uploaded_resume)
+st.markdown("### Step 3: Paste Secondary Skills")
+secondary_skills = st.text_area("Secondary Skills (Good to Have)", height=100)
+
+st.markdown("### Step 4: Upload Resume")
+resume_file = st.file_uploader("Upload Resume", type=["pdf", "docx", "txt"])
+
+if resume_file and (job_duties or core_skills or secondary_skills):
+    resume_text = extract_text(resume_file)
     st.markdown("---")
-    st.subheader(f"📄 Evaluation for: {uploaded_resume.name}")
-    feedback = evaluate(job_requirements, resume_text)
-    for point in feedback:
-        st.markdown(point)
+    st.header(f"📄 Evaluation for: {resume_file.name}")
+
+    all_results = []
+    all_gaps = []
+
+    if job_duties:
+        duties, duty_gaps = evaluate_section("Job Duties Fit", job_duties, resume_text)
+        all_results.extend(duties)
+        all_gaps.extend(duty_gaps)
+
+    if core_skills:
+        skills, skill_gaps = evaluate_section("Core Skills Fit", core_skills, resume_text)
+        all_results.extend(skills)
+        all_gaps.extend(skill_gaps)
+
+    if secondary_skills:
+        secondary, sec_gaps = evaluate_section("Secondary Skills Fit", secondary_skills, resume_text)
+        all_results.extend(secondary)
+        all_gaps.extend(sec_gaps)
+
+    st.markdown("### 🧠 Summary & Recommendation")
+    excellent = sum(1 for _, lvl in all_results if lvl == "Excellent")
+    strong = sum(1 for _, lvl in all_results if lvl == "Strong")
+    total = len(all_results)
+    avg_score = (excellent * 1.0 + strong * 0.8) / total if total else 0
+
+    if avg_score > 0.75:
+        st.success("✅ **Overall Fit:** Strong fit — proceed to interview.")
+    elif avg_score > 0.5:
+        st.warning("⚠️ **Overall Fit:** Moderate fit — consider further evaluation.")
+    else:
+        st.error("❌ **Overall Fit:** Weak fit — likely not suitable.")
+
+    if all_gaps:
+        st.markdown("### ⚠️ Gaps Identified")
+        for gap in all_gaps:
+            st.markdown(f"- {gap}")
+
     st.markdown("---")
-    st.success("✅ Structured evaluation complete.")
+    st.success("✅ Evaluation complete.")
