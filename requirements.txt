@@ -1,6 +1,5 @@
 streamlit
 PyMuPDF
-pdfplumber
 docx2txt
 sentence-transformers
 torch
