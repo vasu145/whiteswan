@@ -9,7 +9,10 @@ import re
 import string
 import base64
 
-# Set background image
+# ✅ Set page config FIRST
+st.set_page_config(page_title="WhiteSwan Advanced Screener", layout="wide")
+
+# 🌄 Set background image
 def set_background(image_file):
     with open(image_file, "rb") as f:
         data = f.read()
@@ -28,7 +31,6 @@ def set_background(image_file):
 
 set_background("background.jpg")
 
-st.set_page_config(page_title="WhiteSwan Advanced Screener", layout="wide")
 st.title("🦢 WhiteSwan Advanced Resume Screener")
 st.write("Upload resumes (PDF, DOCX, TXT) and compare them with a job description. Get a match decision plus a 5-point explanation.")
 
