@@ -1,18 +1,12 @@
 
 import streamlit as st
-import pdfplumber
-import docx2txt
-import io
 import fitz  # PyMuPDF
-from sentence_transformers import SentenceTransformer, util
-import re
-import string
+import docx2txt
 import base64
+from sentence_transformers import SentenceTransformer, util
 
-# ✅ Set page config FIRST
-st.set_page_config(page_title="WhiteSwan Advanced Screener", layout="wide")
+st.set_page_config(page_title="WhiteSwan Structured Screener", layout="wide")
 
-# 🌄 Set background image
 def set_background(image_file):
     with open(image_file, "rb") as f:
         data = f.read()
@@ -31,90 +25,62 @@ def set_background(image_file):
 
 set_background("background.jpg")
 
-st.title("🦢 WhiteSwan Advanced Resume Screener")
-st.write("Upload resumes (PDF, DOCX, TXT) and compare them with a job description. Get a match decision plus a 5-point explanation.")
+st.title("🦢 WhiteSwan Structured Resume Screener")
+st.write("Upload resumes and provide structured job requirements to get a recruiter-style evaluation.")
 
 @st.cache_resource
 def load_model():
-    return SentenceTransformer('all-MiniLM-L6-v2')
+    return SentenceTransformer("all-MiniLM-L6-v2")
 
 model = load_model()
 
-def extract_text_from_pdf(file):
-    text = ""
-    with fitz.open(stream=file.read(), filetype="pdf") as doc:
-        for page in doc:
-            text += page.get_text()
-    return text
+def extract_text(file):
+    if file.type == "application/pdf":
+        text = ""
+        with fitz.open(stream=file.read(), filetype="pdf") as doc:
+            for page in doc:
+                text += page.get_text()
+        return text
+    elif file.type in ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"]:
+        return docx2txt.process(file)
+    else:
+        return file.read().decode("utf-8")
 
-def extract_text_from_docx(file):
-    return docx2txt.process(file)
+def score_fit(requirement, resume_text):
+    req_embedding = model.encode(requirement, convert_to_tensor=True)
+    res_embedding = model.encode(resume_text, convert_to_tensor=True)
+    score = util.cos_sim(req_embedding, res_embedding).item()
+    if score > 0.75:
+        return "Excellent"
+    elif score > 0.55:
+        return "Strong"
+    elif score > 0.35:
+        return "Moderate"
+    elif score > 0.20:
+        return "Weak"
+    else:
+        return "Missing"
 
-def extract_text_from_txt(file):
-    return file.read().decode('utf-8')
-
-def clean_text(text):
-    text = text.lower()
-    text = re.sub(r"[^a-zA-Z0-9+]", " ", text)
-    return text
-
-def tokenize(text):
-    stop_words = set([
-        "the", "and", "for", "are", "with", "that", "this", "you", "your", "have",
-        "has", "had", "was", "were", "not", "but", "from", "they", "their", "been",
-        "will", "would", "could", "should", "about", "into", "than", "then", "out",
-        "get", "got", "also", "each", "any", "all", "per", "she", "him", "her", "our",
-        "its", "it's", "is", "am", "an", "a", "of", "to", "in", "on", "by", "as", "be", "at", "or", "if", "it", "so", "we", "do"
-    ])
-    words = clean_text(text).split()
-    return set([w for w in words if w not in stop_words and len(w) > 2])
-
-def compare_jd_resume(jd_text, resume_text):
-    jd_embedding = model.encode(jd_text, convert_to_tensor=True)
-    resume_embedding = model.encode(resume_text, convert_to_tensor=True)
-    score = util.cos_sim(jd_embedding, resume_embedding).item()
-    score_percent = round(score * 100, 2)
-    jd_keys = tokenize(jd_text)
-    res_keys = tokenize(resume_text)
-    matched = jd_keys & res_keys
-    missing = jd_keys - res_keys
-    return score_percent, matched, missing
-
-def generate_feedback(score, matched, missing):
+def evaluate(requirements, resume_text):
     feedback = []
-    feedback.append(f"1. **Overall Match Score:** {score}%")
-    if matched:
-        feedback.append(f"2. **Matched Skills/Keywords:** {', '.join(sorted(list(matched))[:7])}")
-    else:
-        feedback.append("2. **Matched Skills/Keywords:** None of the core keywords were found.")
-    if missing:
-        feedback.append(f"3. **Missing Key Skills/Keywords:** {', '.join(sorted(list(missing))[:7])}")
-    else:
-        feedback.append("3. **Missing Key Skills/Keywords:** None; candidate covers all identified keywords.")
-    feedback.append("4. **Domain Relevance:** Resume content is evaluated for industry-specific terms.")
-    if score > 75:
-        feedback.append("5. **Recommendation:** Strong fit; proceed to next stage.")
-    elif score > 50:
-        feedback.append("5. **Recommendation:** Moderate fit; consider further screening.")
-    else:
-        feedback.append("5. **Recommendation:** Weak fit; likely not suitable for this role.")
+    for i, req in enumerate(requirements.split("\n")):
+        if req.strip():
+            level = score_fit(req, resume_text)
+            feedback.append(f"{i+1}. **{req.strip()}**: {level}")
     return feedback
 
-jd_text = st.text_area("Paste the Job Description", height=200)
-uploaded_files = st.file_uploader("Upload Resumes (PDF, DOCX, TXT)", type=["pdf","docx","txt"], accept_multiple_files=True)
+st.markdown("### Step 1: Paste Job Responsibilities (one per line)")
+job_requirements = st.text_area("Example:\nDesign/Develop IBM FTM Solutions\nCollaborate with Teams\nTranslate Requirements...", height=200)
 
-if jd_text and uploaded_files:
-    for file in uploaded_files:
-        st.subheader(f"📄 {file.name}")
-        if file.type == "application/pdf":
-            resume_text = extract_text_from_pdf(file)
-        elif file.type in ("application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/msword"):
-            resume_text = extract_text_from_docx(file)
-        else:
-            resume_text = extract_text_from_txt(file)
-        score, matched, missing = compare_jd_resume(jd_text, resume_text)
-        feedback_points = generate_feedback(score, matched, missing)
-        st.write(f"**Match Score:** {score}%")
-        for point in feedback_points:
-            st.markdown(point)
-        st.markdown("---")
+st.markdown("### Step 2: Upload Resume (PDF or DOCX or TXT)")
+uploaded_resume = st.file_uploader("Upload Resume", type=["pdf", "docx", "txt"])
+
+if job_requirements and uploaded_resume:
+    resume_text = extract_text(uploaded_resume)
+    st.markdown("---")
+    st.subheader(f"📄 Evaluation for: {uploaded_resume.name}")
+    feedback = evaluate(job_requirements, resume_text)
+    for point in feedback:
+        st.markdown(point)
+    st.markdown("---")
+    st.success("✅ Structured evaluation complete.")
