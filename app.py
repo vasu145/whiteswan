@@ -1,80 +1,131 @@
+
 import streamlit as st
-import pdfplumber
+import fitz  # PyMuPDF
 import docx2txt
-import os
-import tempfile
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import base64
+from sentence_transformers import SentenceTransformer, util
 
-st.set_page_config(page_title="WhiteSwan Resume Screener", layout="wide")
+st.set_page_config(page_title="Recruiter-Style Resume Screener", layout="wide")
 
-st.markdown("""
+def set_background(image_file):
+    with open(image_file, "rb") as f:
+        data = f.read()
+        encoded = base64.b64encode(data).decode()
+    css = f"""
     <style>
-        .main {background-color: #f5f7fa;}
-        .title {text-align: center; font-size: 2.5em; color: #2c3e50; font-weight: bold;}
-        .subheader {color: #34495e;}
-        .stTextArea textarea {font-size: 16px;}
+    .stApp {{
+        background-image: url("data:image/jpg;base64,{encoded}");
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-position: center;
+    }}
     </style>
-""", unsafe_allow_html=True)
+    """
+    st.markdown(css, unsafe_allow_html=True)
 
-st.markdown('<div class="title">🦢 WhiteSwan AI Resume Screener</div>', unsafe_allow_html=True)
-st.markdown("### Upload resumes and enter the job description to get contextual match feedback.")
+set_background("background.jpg")
 
-# ----------- Job Description Input -------------
-job_description = st.text_area("Paste the Job Description", height=250)
+st.title("🦢 WhiteSwan Recruiter-Style Resume Reviewer")
 
-# ----------- File Upload -------------
-uploaded_files = st.file_uploader("Upload Resume files (PDF or DOCX)", type=["pdf", "docx"], accept_multiple_files=True)
+@st.cache_resource
+def load_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
 
-# ----------- Extract Resume Text -------------
-def extract_text_from_pdf(file):
-    text = ""
-    with pdfplumber.open(file) as pdf:
-        for page in pdf.pages:
-            text += page.extract_text() + "\n"
-    return text
+model = load_model()
 
-def extract_text_from_docx(file):
-    temp_path = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
-    temp_path.write(file.read())
-    temp_path.close()
-    text = docx2txt.process(temp_path.name)
-    os.unlink(temp_path.name)
-    return text
-
-def get_resume_text(file):
-    if file.name.endswith('.pdf'):
-        return extract_text_from_pdf(file)
-    elif file.name.endswith('.docx'):
-        return extract_text_from_docx(file)
+def extract_text(file):
+    if file.type == "application/pdf":
+        text = ""
+        with fitz.open(stream=file.read(), filetype="pdf") as doc:
+            for page in doc:
+                text += page.get_text()
+        return text
+    elif file.type in ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"]:
+        return docx2txt.process(file)
     else:
-        return ""
+        return file.read().decode("utf-8")
 
-# ----------- Matching Logic -------------
-def match_resume_to_jd(resume_text, jd_text):
-    vectorizer = TfidfVectorizer(stop_words='english')
-    vectors = vectorizer.fit_transform([resume_text, jd_text])
-    similarity = cosine_similarity(vectors[0:1], vectors[1:2])
-    return float(similarity[0][0])
-
-# ----------- Process Resumes -------------
-if st.button("Analyze Resumes"):
-    if not job_description:
-        st.warning("Please enter the job description.")
-    elif not uploaded_files:
-        st.warning("Please upload at least one resume.")
+def score_fit(requirement, resume_text):
+    req_embedding = model.encode(requirement, convert_to_tensor=True)
+    res_embedding = model.encode(resume_text, convert_to_tensor=True)
+    score = util.cos_sim(req_embedding, res_embedding).item()
+    if score > 0.75:
+        return "Excellent"
+    elif score > 0.55:
+        return "Strong"
+    elif score > 0.35:
+        return "Moderate"
+    elif score > 0.20:
+        return "Weak"
     else:
-        with st.spinner("Analyzing resumes..."):
-            for file in uploaded_files:
-                resume_text = get_resume_text(file)
-                score = match_resume_to_jd(resume_text, job_description)
-                st.subheader(f"📄 {file.name}")
-                st.write(f"**Match Score:** {round(score * 100, 2)}%")
+        return "Missing"
 
-                if score >= 0.75:
-                    st.success("✅ Strong match! Likely a good fit based on JD.")
-                elif score >= 0.5:
-                    st.info("⚠️ Moderate match. May need further review.")
-                else:
-                    st.warning("❌ Weak match. Unlikely to fit well.")
+def evaluate_section(title, items, resume_text):
+    st.markdown(f"### 📌 {title}")
+    results = []
+    gaps = []
+    for i, item in enumerate(items.split("\n")):
+        if item.strip():
+            level = score_fit(item.strip(), resume_text)
+            results.append((item.strip(), level))
+            if level in ["Missing", "Weak"]:
+                gaps.append(item.strip())
+    for req, level in results:
+        st.markdown(f"- **{req}**: {level}")
+    return results, gaps
 
+st.markdown("### Step 1: Paste Job Duties")
+job_duties = st.text_area("Job Duties (one per line)", height=150)
+
+st.markdown("### Step 2: Paste Core Skills")
+core_skills = st.text_area("Core Skills (Must Have)", height=120)
+
+st.markdown("### Step 3: Paste Secondary Skills")
+secondary_skills = st.text_area("Secondary Skills (Good to Have)", height=100)
+
+st.markdown("### Step 4: Upload Resume")
+resume_file = st.file_uploader("Upload Resume", type=["pdf", "docx", "txt"])
+
+if resume_file and (job_duties or core_skills or secondary_skills):
+    resume_text = extract_text(resume_file)
+    st.markdown("---")
+    st.header(f"📄 Evaluation for: {resume_file.name}")
+
+    all_results = []
+    all_gaps = []
+
+    if job_duties:
+        duties, duty_gaps = evaluate_section("Job Duties Fit", job_duties, resume_text)
+        all_results.extend(duties)
+        all_gaps.extend(duty_gaps)
+
+    if core_skills:
+        skills, skill_gaps = evaluate_section("Core Skills Fit", core_skills, resume_text)
+        all_results.extend(skills)
+        all_gaps.extend(skill_gaps)
+
+    if secondary_skills:
+        secondary, sec_gaps = evaluate_section("Secondary Skills Fit", secondary_skills, resume_text)
+        all_results.extend(secondary)
+        all_gaps.extend(sec_gaps)
+
+    st.markdown("### 🧠 Summary & Recommendation")
+    excellent = sum(1 for _, lvl in all_results if lvl == "Excellent")
+    strong = sum(1 for _, lvl in all_results if lvl == "Strong")
+    total = len(all_results)
+    avg_score = (excellent * 1.0 + strong * 0.8) / total if total else 0
+
+    if avg_score > 0.75:
+        st.success("✅ **Overall Fit:** Strong fit — proceed to interview.")
+    elif avg_score > 0.5:
+        st.warning("⚠️ **Overall Fit:** Moderate fit — consider further evaluation.")
+    else:
+        st.error("❌ **Overall Fit:** Weak fit — likely not suitable.")
+
+    if all_gaps:
+        st.markdown("### ⚠️ Gaps Identified")
+        for gap in all_gaps:
+            st.markdown(f"- {gap}")
+
+    st.markdown("---")
+    st.success("✅ Evaluation complete.")

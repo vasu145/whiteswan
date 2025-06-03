@@ -1,4 +1,5 @@
 streamlit
-pdfplumber
+PyMuPDF
 docx2txt
-scikit-learn
+sentence-transformers
+torch
